@@ -77,13 +77,52 @@ ___TEMPLATE_PARAMETERS___
   },
   {
     "type": "LABEL",
+    "name": "customParametersLabel",
+    "displayName": "⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ "
+  },
+  {
+    "type": "LABEL",
+    "name": "customParametersDescription",
+    "displayName": "Custom Event Parameters - Add additional parameters to be sent with each tag monitoring event"
+  },
+  {
+    "type": "SIMPLE_TABLE",
+    "name": "customParameters",
+    "displayName": "Custom Parameters",
+    "simpleTableColumns": [
+      {
+        "defaultValue": "",
+        "displayName": "Parameter Name",
+        "name": "name",
+        "type": "TEXT",
+        "valueValidators": [
+          {
+            "type": "NON_EMPTY"
+          }
+        ]
+      },
+      {
+        "defaultValue": "",
+        "displayName": "Parameter Value",
+        "name": "value",
+        "type": "TEXT",
+        "valueValidators": [
+          {
+            "type": "NON_EMPTY"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "LABEL",
     "name": "versionLabelSeparator",
     "displayName": "⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ "
   },
   {
     "type": "LABEL",
     "name": "versionLabel",
-    "displayName": "template version: 1.1.0"
+    "displayName": "template version: 1.2.0"
   }
 ]
 
@@ -113,18 +152,22 @@ addEventCallback((ctid, eventData) => {
   // For each batch, build a payload and dispatch to the endpoint as a GET request
   tags.forEach(tag => {
     // Try to get tag name from metadata (key 'name' as configured in GTM)
-    const rawTagName = (tag.metadata && tag.metadata.name) || tag.name || 'tag_fired';
-    // Clean tag name: create a more readable format
+    const rawTagName = (tag.metadata && tag.metadata.name) || tag.name || 'undefined';
+    // Clean tag name: create a more readable format, keep existing underscores
     let cleanTagName = '';
-    let lastWasSpace = false;
+    let lastWasUnderscore = false;
     for (let i = 0; i < rawTagName.length; i++) {
       const char = rawTagName.charAt(i);
       if ((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9')) {
         cleanTagName += char;
-        lastWasSpace = false;
-      } else if ((char === ' ' || char === '-') && !lastWasSpace) {
+        lastWasUnderscore = false;
+      } else if (char === '_') {
+        // Keep existing underscores
         cleanTagName += '_';
-        lastWasSpace = true;
+        lastWasUnderscore = true;
+      } else if ((char === ' ' || char === '-') && !lastWasUnderscore) {
+        cleanTagName += '_';
+        lastWasUnderscore = true;
       }
       // Skip all other special characters
     }
@@ -133,7 +176,17 @@ addEventCallback((ctid, eventData) => {
       cleanTagName = cleanTagName.substring(0, cleanTagName.length - 1);
     }
     const basicMeasurementURL = getBasicMeasurementUrlWithTagName(cleanTagName);
-    const payload = '&ep.container_id=' + cv.containerId + '&ep.tag_id=' + tag.id + '&ep.tag_status=' + tag.status + '&epn.tag_execution_time=' + tag.executionTime;
+    let payload = '&ep.container_id=' + cv.containerId + '&ep.tag_id=' + tag.id + '&ep.tag_status=' + tag.status + '&epn.tag_execution_time=' + tag.executionTime;
+    
+    // Add custom parameters if configured
+    if (data.customParameters && data.customParameters.length > 0) {
+      data.customParameters.forEach(param => {
+        if (param.name && param.value) {
+          payload += '&ep.' + encodeUriComponent(param.name) + '=' + encodeUriComponent(param.value);
+        }
+      });
+    }
+    
     log('sending url:  ', basicMeasurementURL + payload);
     sendPixel(basicMeasurementURL + payload, null, null);
   });
